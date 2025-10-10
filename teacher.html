@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emoji Game Setup</title>
+<style>
+body { font-family:sans-serif; text-align:center; margin:10px; }
+input, button { font-size:16px; margin:5px; padding:5px; }
+textarea {
+  font-size:16px; margin:5px; padding:5px; width:250px; height:120px; resize:none;
+  border:1px solid #ccc; border-radius:5px;
+  background: repeating-linear-gradient(
+    to bottom,
+    #fff,
+    #fff 28px,
+    #ccc 28px,
+    #ccc 30px
+  );
+  line-height:30px;
+}
+button { cursor:pointer; }
+</style>
+</head>
+<body>
+
+<h2>ตั้งค่าเกม Emoji</h2>
+<label>Category: <input id="categoryInput" placeholder="ชื่อหมวดหมู่"></label><br>
+<label>Correct Words (one per line):</label><br>
+<textarea id="correctInput"></textarea><br>
+<label>Wrong Words (one per line):</label><br>
+<textarea id="wrongInput"></textarea><br>
+<button onclick="saveConfig()">💾 บันทึก & ไปหน้าเกม</button>
+
+<script>
+let emojiData = null;
+
+// โหลด emoji database
+async function loadEmojiData() {
+  if(!emojiData){
+    const res = await fetch('https://raw.githubusercontent.com/iamcal/emoji-data/master/emoji.json');
+    emojiData = await res.json();
+  }
+}
+
+// โหลด config เก่าถ้ามี
+const savedConfig = JSON.parse(localStorage.getItem('emojiGameConfig')||'{}');
+if(savedConfig.categoryName) document.getElementById('categoryInput').value = savedConfig.categoryName;
+if(savedConfig.correct) document.getElementById('correctInput').value = savedConfig.correct.join('\n');
+if(savedConfig.wrong) document.getElementById('wrongInput').value = savedConfig.wrong.join('\n');
+
+async function saveConfig(){
+  await loadEmojiData();
+
+  const category = document.getElementById('categoryInput').value.trim();
+  const correct = document.getElementById('correctInput').value.split('\n').map(s=>s.trim()).filter(s=>s);
+  const wrong = document.getElementById('wrongInput').value.split('\n').map(s=>s.trim()).filter(s=>s);
+
+  if(!category){ alert("กรุณาใส่ชื่อหมวดหมู่"); return; }
+  if(correct.length===0){ alert("กรุณาใส่คำที่ถูกต้องอย่างน้อย 1 คำ"); return; }
+
+  // ตรวจสอบ emoji
+  let missing = [];
+  [...correct,...wrong].forEach(word=>{
+    const found = emojiData.find(e=>e.short_names.includes(word));
+    if(!found) missing.push(word);
+  });
+
+  if(missing.length > 0){
+    alert("คำต่อไปนี้ไม่มี emoji: " + missing.join(', '));
+    return;
+  }
+
+  // บันทึก config
+  const config = {categoryName:category, correct, wrong};
+  localStorage.setItem('emojiGameConfig', JSON.stringify(config));
+
+  // เด้งไปหน้าเกม
+  window.location.href='game.html';
+}
+</script>
+
+</body>
+</html>

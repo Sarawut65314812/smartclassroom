@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drag & Drop Emoji Game</title>
+<style>
+body { font-family: sans-serif; text-align: center; margin: 10px; overflow: hidden; }
+button { font-size: 16px; padding: 5px 10px; margin: 5px; cursor: pointer; }
+.emoji { position: absolute; font-size: 80px; cursor: grab; user-select: none; touch-action: none; transition: transform 0.1s; }
+.particle { position: absolute; font-size: 16px; opacity: 1; pointer-events: none; animation: fadeOut 0.6s ease-out forwards; }
+@keyframes fadeOut { to { transform: translateY(-20px) scale(0.5); opacity: 0; } }
+#zones { display: flex; justify-content: space-around; margin-top: 20px; }
+.zone { width: 40%; height: 150px; border: 2px dashed #333; border-radius: 10px; line-height: 150px; font-size: 20px; color: #333; }
+
+/* Popup */
+#scorePopup {
+  display:none;
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  background:#fff;
+  border:2px solid #333;
+  padding:30px;
+  font-size:24px;
+  z-index:999;
+  border-radius:10px;
+  box-shadow:0 0 15px rgba(0,0,0,0.5);
+}
+#scorePopup button { font-size: 18px; padding: 6px 12px; margin-top: 10px; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<h2>Category: <span id="categoryName"></span></h2>
+<button onclick="goToTeacher()">⚙️ Teacher Setup</button>
+
+<div id="zones">
+  <div id="correctZone" class="zone">Correct</div>
+  <div id="wrongZone" class="zone">Wrong</div>
+</div>
+<p>Score: <span id="score">0</span></p>
+
+<!-- Popup -->
+<div id="scorePopup">
+  <p>🎉 Your Score: <span id="finalScore"></span> 🎉</p>
+  <button onclick="closePopup()">Close</button>
+</div>
+
+<script>
+let emojiData=null, audioCtx, baseFreq=200;
+const sparkleChars=['✨','🌟','💫','⭐'];
+let createdEmojis={}, score=0;
+
+// โหลด config จาก localStorage
+let teacherConfig = JSON.parse(localStorage.getItem('emojiGameConfig') || '{}');
+document.getElementById('categoryName').innerText = teacherConfig.categoryName || 'Unknown';
+
+// ปุ่มย้อนกลับหน้าครู
+function goToTeacher(){
+  window.location.href = 'teacher.html'; // เปลี่ยนเป็นไฟล์หน้าครูของคุณ
+}
+
+// โหลด emoji data
+async function loadEmojiData() {
+  if(!emojiData){
+    const res=await fetch('https://raw.githubusercontent.com/iamcal/emoji-data/master/emoji.json');
+    emojiData=await res.json();
+  }
+}
+
+// particle effect
+function createParticle(x,y){
+  const p=document.createElement('div');
+  p.className='particle';
+  p.innerText=sparkleChars[Math.floor(Math.random()*sparkleChars.length)];
+  p.style.left=`${x}px`; p.style.top=`${y}px`;
+  p.style.transform=`scale(${Math.random()*1.5+0.5})`;
+  document.body.appendChild(p);
+  setTimeout(()=>p.remove(),600);
+}
+
+// เสียงลาก
+function initAudio(){
+  if(!audioCtx){ 
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)(); 
+    const s=audioCtx.createBufferSource(); s.connect(audioCtx.destination); s.start(); 
+  }
+}
+function playSlideTone(freqStart,freqEnd){
+  if(!audioCtx) return;
+  const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain();
+  osc.type='sine';
+  osc.frequency.setValueAtTime(freqStart,audioCtx.currentTime);
+  osc.frequency.linearRampToValueAtTime(freqEnd,audioCtx.currentTime+0.15);
+  gain.gain.setValueAtTime(0.05,audioCtx.currentTime); 
+  gain.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.2);
+  osc.connect(gain); gain.connect(audioCtx.destination); 
+  osc.start(); osc.stop(audioCtx.currentTime+0.2);
+}
+
+// สร้าง emoji
+function createEmoji(char,keyWord){
+  if(createdEmojis[keyWord]) return;
+  const emoji=document.createElement('div'); 
+  emoji.classList.add('emoji'); 
+  emoji.innerText=char;
+
+  const startX=50+Math.random()*(window.innerWidth-100);
+  const startY=50+Math.random()*(window.innerHeight-250);
+  const angle=Math.floor(Math.random()*360);
+  const scale=0.8+Math.random()*0.6;
+  emoji.style.left=`${startX}px`; 
+  emoji.style.top=`${startY}px`;
+  emoji.style.transform=`rotate(${angle}deg) scale(${scale})`;
+
+  let offsetX, offsetY;
+  function dragMove(posX,posY){
+    emoji.style.left=`${posX}px`; 
+    emoji.style.top=`${posY}px`;
+    createParticle(posX+40,posY+40);
+    playSlideTone(baseFreq,baseFreq+400);
+    baseFreq=baseFreq>=800?200:baseFreq+50;
+  }
+
+  // Desktop
+  emoji.addEventListener('mousedown',e=>{
+    initAudio(); e.preventDefault();
+    offsetX=e.clientX-emoji.offsetLeft; offsetY=e.clientY-emoji.offsetTop;
+    function onMove(e){ dragMove(e.clientX-offsetX,e.clientY-offsetY); }
+    function onUp(){ 
+      document.removeEventListener('mousemove',onMove); 
+      document.removeEventListener('mouseup',onUp); 
+      checkDrop(); 
+    }
+    document.addEventListener('mousemove',onMove); 
+    document.addEventListener('mouseup',onUp);
+  });
+
+  // Mobile
+  emoji.addEventListener('touchstart',e=>{ 
+    initAudio(); const t=e.touches[0]; offsetX=t.clientX-emoji.offsetLeft; offsetY=t.clientY-emoji.offsetTop; 
+  });
+  emoji.addEventListener('touchmove',e=>{ const t=e.touches[0]; dragMove(t.clientX-offsetX,t.clientY-offsetY); });
+
+  function checkDrop(){
+    const rect=emoji.getBoundingClientRect();
+    const correctZone=document.getElementById('correctZone').getBoundingClientRect();
+    const wrongZone=document.getElementById('wrongZone').getBoundingClientRect();
+
+    if(rect.left+rect.width/2>correctZone.left && rect.left+rect.width/2<correctZone.right &&
+       rect.top+rect.height/2>correctZone.top && rect.top+rect.height/2<correctZone.bottom){
+      if(teacherConfig.correct.includes(keyWord)){score+=1;} else{score-=1;}
+      document.getElementById('score').innerText=score; 
+      emoji.remove();
+      delete createdEmojis[keyWord];
+      checkEndGame();
+    } else if(rect.left+rect.width/2>wrongZone.left && rect.left+rect.width/2<wrongZone.right &&
+              rect.top+rect.height/2>wrongZone.top && rect.top+rect.height/2<wrongZone.bottom){
+      if(teacherConfig.wrong.includes(keyWord)){score+=1;} else{score-=1;}
+      document.getElementById('score').innerText=score; 
+      emoji.remove();
+      delete createdEmojis[keyWord];
+      checkEndGame();
+    }
+  }
+
+  document.body.appendChild(emoji); 
+  createdEmojis[keyWord]=emoji;
+}
+
+// ตรวจสอบจบเกม
+function checkEndGame(){
+  if(Object.keys(createdEmojis).length===0){
+    document.getElementById('finalScore').innerText=score;
+    document.getElementById('scorePopup').style.display='block';
+  }
+}
+function closePopup(){
+  document.getElementById('scorePopup').style.display='none';
+}
+
+// โหลด emoji ทั้งหมด
+async function startGame(){
+  if(!teacherConfig.correct || teacherConfig.correct.length===0){ 
+    alert("No teacher config found! กรุณาไปหน้าครูตั้งค่า"); 
+    return; 
+  }
+  await loadEmojiData(); 
+  createdEmojis={}; score=0; 
+  document.getElementById('score').innerText=score;
+
+  let missing=[];
+  [...teacherConfig.correct,...teacherConfig.wrong].forEach(word=>{
+    const found=emojiData.find(e=>e.short_names.includes(word));
+    if(found){ 
+      const char=String.fromCodePoint(...found.unified.split('-').map(u=>parseInt(u,16))); 
+      createEmoji(char,word);
+    } else { missing.push(word); }
+  });
+  if(missing.length>0){ alert("คำต่อไปนี้ไม่มี emoji: "+missing.join(', ')); }
+}
+
+startGame();
+</script>
+</body>
+</html>
