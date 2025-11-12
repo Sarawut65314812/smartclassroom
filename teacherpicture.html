@@ -610,6 +610,13 @@ button { cursor:pointer; }
     box-sizing: border-box !important;
   }
 }
+
+/* Adjust white box alignment inside red/green panels for landscape */
+@media (min-width: 768px) and (max-width: 1366px) and (orientation: landscape) {
+  .main-container > div[style*="display:flex"] > div .file-input-wrapper {
+    margin-left: 10% !important; /* Shift white box 10% to the left */
+  }
+}
 </style>
 </head>
 <body>
