@@ -627,6 +627,13 @@ button { cursor:pointer; }
     width: 100% !important; /* Override any conflicting width */
   }
 }
+
+/* Shift white box inside red/green panels to the left for portrait */
+@media (min-width: 768px) and (max-width: 1366px) and (orientation: portrait) {
+  .main-container > div[style*="display:flex"] > div .file-input-wrapper {
+    margin-left: 20px !important; /* Shift the white box 20px to the left */
+  }
+}
 </style>
 </head>
 <body>
